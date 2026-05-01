@@ -1,5 +1,11 @@
 import type { CameraStatus } from '../types/index';
 
+/** カメラデバイス情報 */
+export interface CameraDevice {
+  deviceId: string;
+  label: string;
+}
+
 /**
  * VideoCaptureModule
  *
@@ -13,6 +19,55 @@ export class VideoCaptureModule {
   private videoElement: HTMLVideoElement | null = null;
   private animationFrameId: number | null = null;
   private frameCallbacks: Set<(video: HTMLVideoElement) => void> = new Set();
+  private currentDeviceId: string | null = null;
+
+  /**
+   * 利用可能なカメラデバイスの一覧を取得する。
+   * 注意: ブラウザによってはカメラアクセス許可後でないとラベルが取得できない。
+   */
+  async getAvailableDevices(): Promise<CameraDevice[]> {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    return devices
+      .filter((d) => d.kind === 'videoinput')
+      .map((d, i) => ({
+        deviceId: d.deviceId,
+        label: d.label || `カメラ ${i + 1}`,
+      }));
+  }
+
+  /** 現在使用中のカメラデバイスIDを取得する */
+  getCurrentDeviceId(): string | null {
+    return this.currentDeviceId;
+  }
+
+  /**
+   * カメラデバイスを切り替える。
+   * 現在のストリームを停止し、指定デバイスで再開する。
+   */
+  async switchDevice(deviceId: string, constraints?: MediaStreamConstraints): Promise<void> {
+    const wasActive = this.status === 'active';
+    if (wasActive) {
+      this.stop();
+    }
+
+    const mergedConstraints: MediaStreamConstraints = constraints ?? {
+      video: {
+        width: { ideal: 640 },
+        height: { ideal: 480 },
+        frameRate: { ideal: 30 },
+      },
+      audio: false,
+    };
+
+    // deviceId を video constraints に注入
+    if (typeof mergedConstraints.video === 'object' && mergedConstraints.video !== null) {
+      (mergedConstraints.video as MediaTrackConstraints).deviceId = { exact: deviceId };
+    } else {
+      mergedConstraints.video = { deviceId: { exact: deviceId } };
+    }
+
+    await this.start(mergedConstraints);
+  }
 
   /** カメラストリームを開始する */
   async start(constraints?: MediaStreamConstraints): Promise<void> {
@@ -56,6 +111,10 @@ export class VideoCaptureModule {
     this.videoElement.muted = true;
 
     await this.videoElement.play();
+
+    // Track the active device ID
+    const videoTrack = this.stream.getVideoTracks()[0];
+    this.currentDeviceId = videoTrack?.getSettings().deviceId ?? null;
 
     this.status = 'active';
     this.startFrameLoop();

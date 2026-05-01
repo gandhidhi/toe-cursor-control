@@ -143,6 +143,8 @@ export interface AppState {
 export interface AppSettings {
   /** 検出対象の足 */
   targetFoot: 'left' | 'right';
+  /** 検出モード: 'mediapipe' (正面カメラ) or 'contour' (天井カメラ) */
+  detectionMode: 'mediapipe' | 'contour';
   /** スムージング設定 */
   smoothing: SmoothingConfig;
   /** タップ検出設定 */
@@ -174,6 +176,7 @@ export interface CalibrationProgress {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   targetFoot: 'right',
+  detectionMode: 'mediapipe',
   smoothing: {
     alpha: 0.3,
     deadZone: 5,
